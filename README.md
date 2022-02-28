@@ -1,4 +1,2 @@
 # GP-Oceans-Helmholtz
-Repo for studying the use of Gaussian Processes for modelling ocean currents.
-
-The 
+Repo for studying the use of Gaussian Processes for modelling ocean currents. 
