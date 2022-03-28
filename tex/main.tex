@@ -5,10 +5,13 @@
 \usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
 %\usepackage{gentium}
-\usepackage{mathptmx} % Use Times Font
+%\usepackage{mathptmx} % Use Times Font
 
 \usepackage{amsmath}
 \usepackage{amsthm}
+\usepackage{bm}
+
+
 
 \newcommand{\icol}[1]{% inline column vector
   \left(\begin{smallmatrix}#1\end{smallmatrix}\right)%
@@ -18,10 +21,18 @@
   \begin{smallmatrix}(#1)\end{smallmatrix}%
 }
 
+\newcommand{\TODO}[2]{ {\small \bf (!)} {#1} + {#2}}
 
 \usepackage[pdftex]{graphicx} % Required for including pictures
 \usepackage[english]{babel} % Swedish translations
-\usepackage[pdftex,linkcolor=black,pdfborder={0 0 0}]{hyperref} % Format links for pdf
+\usepackage[pdftex,linkcolor=blue,pdfborder={0 0 0}]{hyperref} % Format links for pdf
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+    }
+
 \usepackage{calc} % To reset the counter in the document after title page
 \usepackage{enumitem} % Includes lists
 
@@ -38,8 +49,10 @@
 \usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
 
 \newtheorem{theorem}{Theorem}
-
+\newtheorem{definition}{Definition}
 \newtheorem{fact}{Fact}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
 
 %-----------------------
 % Set pdf information and add title, fill in the fields
@@ -55,6 +68,7 @@ pdfauthor = {}
 %-----------------------
 \begin{document} %All text i dokumentet hamnar mellan dessa taggar, allt ovanför är formatering av dokumentet
 
+
 \section*{Preamble 1: Gaussian Processes for Vector Valued Functions}
 In this section, we fix some notation for the rest of the document, by describing Gaussian Processes (GPs) for vector valued functions as in Alvarez et al. (\textit{Kernels for vector valued functions: a Review}, 2011). \\
 
@@ -64,73 +78,121 @@ f(\textbf{X}) \sim \mathcal{N}(m(\textbf{X}), k(\textbf{X}, \textbf{X}))
 $$
 where $m(\textbf{X}) = [m(\textbf{x}_1), \ldots, m(\textbf{x}_N)]^T$ and $k(\textbf{X}, \textbf{X})$ is a $N \times N$ kernel matrix.
 
-In the multiple output case, the random variables are associated to different processes $\{f_d(\textbf{X})\}_{d=1}^D$, evaluated at input values $\textbf{X}$. Note that here we're making the simplifying assumption that each component has the same cardinality, and the input to all the components are the same, as in our problem of interest. Then, the GP characterization generalizes to 
+In the multiple output case, the random variables are associated to different processes $\{f_d(\textbf{X})\}_{d=1}^D$, evaluated at input values $\textbf{X}$. Define $f(\textbf{X)} = [f_1(\textbf{X}), \ldots, f_D(\textbf{X})]^T$, a N$\times$D dimensional vector, where each entry $f_d(\textbf{X})$ is N-dimensional as in the 1D framework above. Note that here we're making the simplifying assumption that each component has the same cardinality, and the input to all the components are the same, as in our problem of interest. Then, the GP characterization generalizes to 
 $$
 f(\textbf{X}) \sim \mathcal{N}(\textbf{m}(\textbf{X}), \textbf{K}(\textbf{X}, \textbf{X}))
 $$
-where (i) $\textbf{m}(\textbf{X)}$ is a vector of dimension $ND$ that concatenates the mean vectors associated to the outputs $\{m_d(\textbf{X})\}_{d=1}^D$, i.e. $\textbf{m}(\textbf{X)} = [m_1(\textbf{x}_1), \ldots, m_D(\textbf{x}_1), \ldots, m_1(\textbf{x}_N), \ldots, m_D(\textbf{x}_N)]^T$, and (ii) $\textbf{K}(\textbf{X}, \textbf{X})$ is a block-partitioned $ND \times ND$ matrix,
+where (i) $\textbf{m}(\textbf{X)}$ is a vector of dimension $ND$ that concatenates the mean vectors associated to the outputs $\allowdisplaybreaks \{m_d(\textbf{X})\}_{d=1}^D$, i.e. $\textbf{m}(\textbf{X)} = [m_1(\textbf{x}_1), \ldots, m_1(\textbf{x}_N), m_2(\textbf{x}_1), \ldots, m_D(\textbf{x}_1), \ldots, m_D(\textbf{x}_N)]^T$, and (ii) $\textbf{K}(\textbf{X}, \textbf{X})$ is a block-partitioned $ND \times ND$ matrix,
 $$
 \textbf{K}(\textbf{X}, \textbf{X}) = 
 \begin{bmatrix}
-\textbf{K}(\textbf{X}, \textbf{X})_{1,1} & \ldots & \textbf{K}(\textbf{X}, \textbf{X})_{1,D} \\  \textbf{K}(\textbf{X}, \textbf{X})_{2,1} & \ldots & \textbf{K}(\textbf{X}, \textbf{X})_{2,D} \\
+\textbf{K}_{1,1}(\textbf{X}, \textbf{X}) & \ldots & \textbf{K}_{1,D}(\textbf{X}, \textbf{X}) \\  \textbf{K}_{2,1}(\textbf{X}, \textbf{X}) & \ldots & \textbf{K}_{2,D}(\textbf{X}, \textbf{X}) \\
 \vdots & \ldots & \vdots \\
-\textbf{K}(\textbf{X}, \textbf{X})_{D,1} & \ldots & \textbf{K}(\textbf{X}, \textbf{X})_{D,D}
+\textbf{K}_{D,1}(\textbf{X}, \textbf{X}) & \ldots & \textbf{K}_{D,D}(\textbf{X}, \textbf{X})
 \end{bmatrix}
  $$
  where each block $\textbf{K}(\textbf{X}, \textbf{X})_{d,d^\prime}$ is an $N \times N$ kernel  matrix such that the entries $\textbf{K}(\textbf{x}, \textbf{x}^\prime)_{d,d^\prime}$ correspond to the covariances between the outputs $f_d(\textbf{x})$ and $f_{d^\prime}(\textbf{x}^\prime)$, and express the degree of correlation or similarity between them. \\
  
-\textbf{Question}: \textit{what is the correct order for expressing both $f(\textbf{X})$ and $m(\textbf{x})$ as 1D column vectors? }
 
 \section*{Preamble 2: Helmholtz decomposition}
 
-Here, review main concepts about Helmholtz decomposition in a somewhat coincise way, following the review paper "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=\&arnumber=6365629". 
+Here, review main concepts about Helmholtz decomposition in a somewhat coincise way, following  \href{https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=\&arnumber=6365629}{this} review paper. 
 
 
-\section*{Framework introduction}
+\section*{Gaussian Processes for 2D oceans vector fields}
 
-In our problem of interest, we are given a 2D vector field F : $ \mathbb{R}^2 \rightarrow \mathbb{R}^2$, mapping spatial locations, $(X,Y)$, into horizontal and vertical velocities, $(U,V)$, representing buoys floating across the oceans. In terms of data, we have N observations, at locations $\textbf{X} = \{\textbf{x}_n\}_{n=1}^N = \{(x_1, y_1), \ldots, (x_N, y_N)\}$, and the corresponding vector field velocity observations, $F(\textbf{X}) = \{F(\textbf{x}_n)\}_{n=1}^N = \{(u_1, v_1), \ldots, (u_N, v_N\})$. Referring to the above notation, we have $D = 2$, and $f_1(\textbf{x}) := u(\textbf{x})$, $f_2(\textbf{x}) := v(\textbf{x})$. Our ultimate goal is to reconstruct ocean currents given these data, that is, predict the velocity field at spatial locations where we don't observe any buoy, with some measure of uncertainty about the quality of our prediction. 
+In our problem of interest, we are given a 2D vector field F : $ \mathbb{R}^2 \rightarrow \mathbb{R}^2$, mapping spatial locations, $(x^1,x^2)$, into horizontal and vertical velocities, $(F^1,F^2)$, representing buoys floating across the oceans. In terms of data, we have M observations, at locations $\textbf{X} = \{\textbf{x}_m\}_{m=1}^M = \{(x_1^1, x_1^2), \ldots, (x_M^1, x_M^2)\}$, and the corresponding vector field velocity observations, $\textbf{F}(\textbf{X}) = [\textbf{F}_1, \textbf{F}_2, \ldots, \textbf{F}_M] := [(F^1(\textbf{x}_1), F^2(\textbf{x}_1)), \ldots,  (F^1(\textbf{x}_M), F^2(\textbf{x}_M))]$, where $F^1(\textbf{x}_m)$ represents the horizontal velocity at location $\textbf{x}_m$, and $F^2(\textbf{x}_m)$ the vertical one. 
 
-Independently for each n, we model the likelihood for our quantities of interest as
+
+Our ultimate goal is to reconstruct ocean currents given these data, that is, predict the velocity field at spatial locations where we don't observe any buoy, with some measure of uncertainty about the quality of our prediction. 
+
+Independently for each m, we model the likelihood for our quantities of interest as
 $$
-(u_n, v_n) \mid (x_n, y_n) \stackrel{\text{ind}}{\sim} \mathcal{N}\left(\text{F}(x_n, y_n), \begin{bmatrix}
+(F^1(\textbf{x}_m), F^2(\textbf{x}_m)) \stackrel{\text{ind}}{\sim} \mathcal{N}\left(\text{\textbf{F}}_m, \begin{bmatrix}
 \sigma^2_{\text{obs}} & 0 \\ 0 & \sigma^2_{\text{obs}}
 \end{bmatrix} \right)
 $$
 where $\sigma^2_{\text{obs}}$ represent the variance of our observations.
 
-In order to characterize the posterior distribution, we need to specify a prior for $(u_n, v_n)$. Here is where the Helmholtz decomposition comes into play. According to this result, any sufficiently smooth, rapidly decaying vector field in two dimensions can be resolved into the sum of an irrotational (curl-free) scalar vector field and a solenoidal (divergence-free) vector field. 
+In order to characterize the posterior distribution, we need to specify a prior for $\textbf{F}_m$. Here is where the Helmholtz decomposition comes into play. According to this result, any sufficiently smooth, rapidly decaying vector field in two dimensions can be resolved into the sum of an irrotational (curl-free) scalar vector field and a solenoidal (divergence-free) vector field. 
 
 As an irrotational vector field has a scalar potential and a solenoidal vector field has a vector potential, we can formally write down the decomposition as 
 $$
- \text{F} = -\nabla \phi +\nabla \times \psi
+ \text{\textbf{F}} = -\nabla \bm{\phi} +\nabla \times \bm{\psi}
 $$
- where $\phi$ is the scalar potential, and $\psi$ the vector potential.
+ where $\bm{\phi} : \mathbb{R}^2 \rightarrow \mathbb{R}$ is the scalar potential, and $\bm{\psi}$ the vector potential. In abuse of notation, we consider $\bm{\psi} : \mathbb{R}^2 \rightarrow \mathbb{R}$, and define $(\nabla \times \bm{\psi})(\textbf{x}) := [\partial \bm{\psi}(\textbf{x}) / \partial x^2, -\partial \bm{\psi}(\textbf{x}) / \partial x^1]^T$.
+ 
  
  In our work, we model these two quantities \textbf{independently}, so that we can naturally specify two distinct GP priors on them, that is
 \begin{align*}
-    \phi \sim \text{GP}(0, K_{\phi}) \\
-    \psi \sim \text{GP}(0,K_{\psi}) \\
+    \bm{\phi} \sim \text{GP}(0, K_{\phi}) \\
+    \bm{\psi} \sim \text{GP}(0,K_{\psi}) \\
 \end{align*}
 so that 
 \begin{align*}
-    \phi(\textbf{X}) \sim \mathcal{N}(0, K_{\phi}(\textbf{X}, \textbf{X})) \\
-\psi(\textbf{X}) \sim \mathcal{N}(0, K_{\psi}(\textbf{X}, \textbf{X}))
+    \bm{\phi}(\textbf{X}) \sim \mathcal{N}(0, K_{\phi}(\textbf{X}, \textbf{X})) \\
+    \bm{\psi}(\textbf{X}) \sim \mathcal{N}(0, K_{\psi}(\textbf{X}, \textbf{X}))
 \end{align*}
 
 
-We can show (see Theorem below  - \textit{when it'll be ready...}) that since (i) the Helmholtz decomposition is based on partial (mixed) derivatives, and (ii) differentiation is a linear operator, this kernel choice implies that the prior on the original vector field F is a GP as well. 
+Note that - to ease notation - from now on we will denote this kernel matrices with $K_{\phi}(\textbf{X}) := K_{\phi}(\textbf{X}, \textbf{X})$. \newline
 
-Consequently, if we consider two observations' indices $n$ and $n^\prime$, and we denote with $\text{Cov}$ the \textit{cross}-covariance, we have that 
+We can show (see Theorem below  - \textit{when it'll be ready...}) that since (i) the Helmholtz decomposition is based on partial (mixed) derivatives, and (ii) differentiation is a linear operator, this kernel choice implies that the prior on the original vector field F is a GP as well. To formalize this statement, we need the following definition and lemma. 
+
+\begin{definition}
+L is a linear operator if $\forall c \in \mathbb{R}$, and $F, F^\prime \in L^2$, $L(cF + F^\prime) = c L(F) + L(F^\prime)$.
+\end{definition}
+
+\begin{lemma}
+Let L be a linear operator. If $F \sim \text{GP} (\mu, K)$, then $L(F) \sim \text{GP}(\mu^\prime, K^\prime)$ for some $(\mu^\prime, K^\prime)$.
+\end{lemma}
+
+\begin{proof}
+Proof (in $L^2$). 
+\end{proof}
+
+\begin{corollary}
+Let $F \sim \text{GP}(\mu, K)$. Then $\nabla F \sim GP (\nabla \mu, \nabla K)$, where $\nabla \mu = ...$, $\nabla K = ...$.
+\end{corollary}
+
+\begin{proof}
+Use above lemma plus Rasmussen plus theorem at the end of this document (that will then be useless?). 
+\end{proof}
+
+
+As a consequence of this, if we consider two observations' indices $m$ and $m^\prime$, and we denote with $\text{Cov}$ the \textit{cross}-covariance, we have that 
 \begin{align*}
-    \text{Cov}((u_n, v_n), (u_{n^\prime}, v_{n^\prime})) &= \text{Cov}(\text{F}(x_n, y_n), \text{F}(x_{n^\prime}, y_{n^\prime})) = \\
-    &= \text{Cov}(-\nabla \phi(x_n, y_n) + \nabla \times \psi(x_n, y_n) , -\nabla \phi(x_{n^\prime}, y_{n^\prime})+\nabla \times \psi(x_{n^\prime}, y_{n^\prime})) = \\
-    &= \text{Cov}(\nabla \phi(x_n, y_n), \nabla \phi(x_{n^\prime}, y_{n^\prime})) + \text{Cov}(\nabla \times \psi(x_n, y_n), \nabla \times \psi(x_{n^\prime}, y_{n^\prime}))
+    \text{Cov}(\textbf{F}_m, \textbf{F}_{m^\prime})  
+    &= \text{Cov}(-\nabla \phi(\textbf{x}_m) + \nabla \times \psi(\textbf{x}_m) , -\nabla \phi(\textbf{x}_{m^\prime})+\nabla \times \psi(\textbf{x}_{m^\prime}) \\
+    &= \text{Cov}(\nabla \phi(\textbf{x}_m), \nabla \phi(\textbf{x}_{m^\prime})) + \text{Cov}(\nabla \times \psi(\textbf{x}_m), \nabla \times \psi(\textbf{x}_{m^\prime}))
 \end{align*}
-where the last equality follows from the independence of $\psi$ and $\phi$. Therefore, we have that our prior on the original vector field F is a GP with the following structure
-$$
-\text{F}(\textbf{X}) \sim \text{GP}(0, \nabla K_{\phi}(\textbf{X}) + \nabla \times K_{\psi}(\textbf{X}))
-$$
-which is easy to deal with, once we specify the prior kernels on $\phi$ and $\psi$.
+where the last equality follows from the independence of $\psi$ and $\phi$. 
+
+Furthermore, the following result on the mean of a Gaussian process can be shown. 
+
+\begin{lemma}
+Let $c \in \mathbb{R}$, $F \sim \text{GP}(\mu, K)$, and $F^\prime \sim \text{GP}(\mu^\prime, K^\prime)$. Under "some" (which?) assumptions, $cF + F^\prime$ is a GP itself, with mean $c\mu + \mu^\prime$.
+\end{lemma}
+
+
+\begin{proof}
+even though trivial, for this we might need some assumptions on when to switch expectation and derivative? maybe this is an issue of the lemma above actually... The condition should be something like Lipshitz continuity with high probability. 
+Can't we just use the above lemma on linear operators?
+\end{proof}
+
+
+Putting everything together, our prior on the original vector field F is a GP with the following structure
+\begin{equation}
+    \text{F}(\textbf{X}) \sim \text{GP}(0, \nabla K_{\phi}(\textbf{X}) + \nabla \times K_{\psi}(\textbf{X}))
+\end{equation}
+
+
+
+where we use $\nabla K_{\phi}(\textbf{X})$ as a shorthand for the 2N $\times$ 2N matrix with entries $\nabla K_{\phi}(\textbf{X})_{n,n^\prime} := \text{Cov}\left(\frac{\partial}{\partial x_n^1} \phi(\textbf{x}_n), \frac{\partial}{\partial x_n^1} \phi(\textbf{x}_n^\prime)\right)$, $\nabla K_{\phi}(\textbf{X})_{n,N + n^\prime} := \text{Cov}\left(\frac{\partial}{\partial x_n^1} \phi(\textbf{x}_n), \frac{\partial}{\partial x_n^2} \phi(\textbf{x}_n^\prime)\right)$, $\nabla K_{\phi}(\textbf{X})_{N + n,n^\prime} := \text{Cov}\left(\frac{\partial}{\partial x_n^2} \phi(\textbf{x}_n), \frac{\partial}{\partial x_n^1} \phi(\textbf{x}_n^\prime)\right)$, and $\nabla K_{\phi}(\textbf{X})_{N + n, N + n^\prime} := \text{Cov}\left(\frac{\partial}{\partial x_n^2} \phi(\textbf{x}_n), \frac{\partial}{\partial x_n^2} \phi(\textbf{x}_n^\prime)\right)$, for $n, n^\prime \in [N]$. \newline
+
+%Note that is easy to be dealt with, once we specify the prior kernels on $\phi$ and $\psi$.
+
+\textbf{Note:} little abuse of notation in the derivative of second component in the covariance terms above. It should be more something like $\frac{\partial}{\partial x_n^{\prime^2}} \phi(\textbf{x}_n^\prime)$.
 
 \section*{Inferring $\phi$ and $\psi$ components of the posterior}
 
@@ -138,9 +200,9 @@ Let F be our vector field of interest. Through the Helmholtz decomposition, we w
 $$
 \text{F} = \nabla \phi + \nabla \times \psi
 $$
-where $\phi$ is the irrotational, curl-free, component, and $\psi$ a divergence-free vector potential. In our analysis, we evaluate our predictions on a grid of size $N \times N$, and we want to know $\phi$ and $\psi$ at each point of the grid. That is, for each $n, n^\prime \in \{1,2,\ldots,N\}$, we are interested in $\phi_{n,n^\prime}, \psi_{n,n^\prime} \in \mathbb{R}$, where $\phi_{n,n^\prime} := \phi((x_n,y_n), (x_{n^\prime},y_{n^\prime})$, and similarly for $\psi_{n,n^\prime}$.
+where $\phi$ is the irrotational, curl-free, component, and $\psi$ a divergence-free vector potential. In our analysis, we evaluate our predictions on a grid of size $G \times G := N$, and we want to know $\phi$ and $\psi$ at each point of the grid, e.g. for visualization purposes. That is, we are interested in $\bm{\phi} \in \mathbb{R}^N$, where $\bm{\phi} = [\phi_1, \ldots, \phi_N]$, $\phi_n := \phi(\textbf{x}_n)$ for each $n \in [N]$, and similarly for $\bm{\psi} \in \mathbb{R}^n$.
 
-Our goal is to plot $\nabla \phi \in \mathbb{R}^2$ and $\nabla \times \psi \in \mathbb{R}^2$, for each pair of interest. To achieve this, we simply need to derive the posterior distribution of $\phi \mid u,v$. In other words, we are interested in retrieving $\mathbb{E}[\phi \mid u,v]$ and $\text{Cov}[\phi \mid u,v]$ For simplicity, in this exposition we focus only on the $\phi$ component, but the following holds in a very similar fashion for $\psi$ as well. \newline
+Our goal is to plot $\nabla \phi \in \mathbb{R}^2$ and $\nabla \times \psi \in \mathbb{R}^2$, for each grid point of interest. To achieve this, we need to derive the posterior distribution of $\bm{\phi} \mid \textbf{F}^\prime$, where $\textbf{F}^\prime := [F^1(\textbf{x}^\prime_1), \ldots, F^1(\textbf{x}^\prime_M), F^2(\textbf{x}^\prime_1), \ldots, F^2(\textbf{x}^\prime_M) ] \in \mathbb{R}^{2M}$ is a vector containing the observations of our vector field $F$ at $M$ given spatial points. In other words, we are simply interested in retrieving $\mathbb{E}[\bm{\phi}\mid\textbf{F}^\prime]$ and $\text{Cov}[\bm{\phi}\mid\textbf{F}^\prime]$ from $\icol{\bm{\phi} \\ \textbf{F}^\prime}$.  For simplicity, in this exposition we focus only on the $\phi$ component, but at the end of the section we will show how these results can be adapted to the $\psi$ component. \newline
 
 Recall the following basic probability facts.
 \begin{fact}
@@ -164,130 +226,133 @@ then $X \mid Y = y \sim \mathcal{N}(\Bar{\mu}, \Bar{\Sigma})$, with $\Bar{\mu} =
 If $a \sim \mathcal{N}(\mu_a, \Sigma_a)$ and $a^{\prime} \sim \mathcal{N}(\mu_{a^{\prime}}, \Sigma_{a^{\prime}})$ are two independent random variables, and $b \mid a, a^{\prime} \sim \mathcal{N}(\mu_a + \mu_{a^{\prime}}, \Sigma_b)$, then $b \sim \mathcal{N}(\mu_a + \mu_{a^{\prime}}, \Sigma_a + \Sigma_{a^{\prime}} + \Sigma_b)$.
 \end{fact}
 
-In order to use these in our problem of interest, we need to express the distribution of $\icol{\phi \\ u \\ v }$. 
+In order to use these in our problem of interest, we need to express the distribution of $\icol{\bm{\phi} \\ \textbf{F}}$. 
 
-We begin considering the random vector $\phi$. By construction, $\phi$ is a vector of size $N^2$, with mean $\textbf{0} \in \mathbb{R}^{N^2}$ and covariance matrix of size $N^2 \times N^2$ determined by $K_{\phi}$. 
 
-Next, we consider $u, v$. Given 
+We begin considering the random vector $\bm{\phi}$. By construction, $\bm{\phi}$ is a vector of size $N$, with mean $\textbf{0} \in \mathbb{R}^{N}$ and covariance matrix of size $N \times N$ determined by $K_{\phi}$. 
+
+Next, we consider $\bm{F}^\prime$. We have 
 $$
-\begin{bmatrix}
-u_m \\ v_m
-\end{bmatrix}
-\mid \phi, \psi \sim \mathcal{N}\left(\nabla \phi (x_m, y_m) + \nabla \times \psi (x_m , y_m), \sigma^2_{\text{obs}} \mathbb{I}_2\right)
+\textbf{F}^\prime_m
+\mid \phi, \psi \sim \mathcal{N}\left(\nabla \phi (\textbf{x}_m) + \nabla \times \psi (\textbf{x}_m), \sigma^2_{\text{obs}} \mathbb{I}_2\right)
 $$
-we can use fact 2 above with 
+where $\mathbb{I}_2$ represents the 2 $\times$ 2 identity matrix. 
+Then, we can use fact 2 above with 
 \begin{align*}
-   &\nabla \phi (\textbf{X}) \sim \mathcal{N}(0, \nabla K_{\phi}(\textbf{X}, \textbf{X})) \\
-   &\nabla \times \psi (\textbf{X}) \sim \mathcal{N}(0, \nabla \times K_{\psi}(\textbf{X}, \textbf{X}))
+   &\nabla \phi (\textbf{X}) \sim \mathcal{N}(0, \nabla K_{\phi}(\textbf{X})) \\
+   &\nabla \times \psi (\textbf{X}) \sim \mathcal{N}(0, \nabla \times K_{\psi}(\textbf{X}))
 \end{align*}
 
 to get
 $$
-\begin{bmatrix}
-u(\textbf{X}) \\ v(\textbf{X})
-\end{bmatrix}
-\sim \mathcal{N}\left(0, \sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi}(\textbf{X}, \textbf{X}) + \nabla \times K_{\psi}(\textbf{X}, \textbf{X}) \right)
+\textbf{F}^\prime
+\sim \mathcal{N}\left(0, \sigma_{\text{obs}}^2 \mathbb{I}_{2M} + \nabla K_{\phi}(\textbf{X}) + \nabla \times K_{\psi}(\textbf{X}) \right)
 $$
-with $\icol{u \\ v}$ of dimension $2M$, and each of the matrices of dimension $2M \times 2M$, where each entry is obtained by evaluating, e.g., $\nabla K_{\phi}((x_m, y_m), (x_{m^\prime},y_{m^\prime}))$. \newline
+where each of the matrices has dimension $2M \times 2M$, and the entries are obtained as in Equation (1) from previous section. \newline
 
-\textbf{ISSUE 1.1:} I am abusing notation for \textbf{X}. Here it's of dimension M, data observed, whereas before it was intended of dimension $N^2$, predicted grid. Fix this. \newline
+%\textbf{ISSUE 1.1:} I am abusing notation for \textbf{X}. Here it's of dimension M, data observed, whereas before it was intended of dimension $N^2$, predicted grid. Fix this. \newline
 
-\textbf{ISSUE 1.2:} By using the "theorem" below, if we unpack the actual $\nabla K_{\phi}((x_m, y_m), (x_{m^\prime},y_{m^\prime}))$ we see that it looks more like a second derivative rather than a first derivative (each entry is a second derivative w.r.t. the corresponding components). Wouldn't it be better to call it H, for Hessian? Rather than using the $\nabla$ symbol for the gradient.  \newline
+%\textbf{ISSUE 1.2:} By using the "theorem" below, if we unpack the actual $\nabla K_{\phi}((x_m, y_m), (x_{m^\prime},y_{m^\prime}))$ we see that it looks more like a second derivative rather than a first derivative (each entry is a second derivative w.r.t. the corresponding components). Wouldn't it be better to call it H, for Hessian? Rather than using the $\nabla$ symbol for the gradient.  \newline
 
-\textbf{ISSUE 1.3:} I only have m points/observations. The covariance matrices have dimension $2M \times 2M$ because the gradient "doubles" the dimension, since it is partial derivative w.r.t. both entries. Question: if I would like to be super explicit in writing down these matrices, how would they be? Alternatively, considering a more computational approach, how are they stored in a computer memory? \newline
+%\textbf{ISSUE 1.3:} I only have m points/observations. The covariance matrices have dimension $2M \times 2M$ because the gradient "doubles" the dimension, since it is partial derivative w.r.t. both entries. Question: if I would like to be super explicit in writing down these matrices, how would they be? Alternatively, considering a more computational approach, how are they stored in a computer memory? \newline
 
-This concludes two blocks of the covariance matrix of $\icol{\phi \\ u \\ v }$. Now we need to take into account the cross terms, i.e. the cross covariance matrix $\text{Cov}(\phi, \icol{u \\ v } )$. Since we have $N^2$ points on the grid, and $M$ observations, this matrix will have size $N^2 \times 2M$, properly fitting in the "hole" in the general covariance matrix of interest. 
+This concludes two blocks of the covariance matrix of $\icol{\bm{\phi} \\ \textbf{F}^\prime}$. Now we need to take into account the cross terms, i.e. the cross covariance matrix $\text{Cov}(\bm{\phi}, \textbf{F}^\prime)$. Since we have $N$ points on the grid, and $M$ observations, this matrix will have size $N \times 2M$, properly fitting in the "hole" in the general covariance matrix of interest. 
 
 Overall, we have 
 
 \begin{align*}
-    \text{Cov}\left(\phi, \begin{bmatrix}
-u \\ v
-\end{bmatrix} \right) = 
+    \text{Cov}\left(\bm{\phi}, \textbf{F}^\prime \right) = 
 \text{Cov}\left( \begin{bmatrix}
-\phi(x_1, y_1) \\ \phi(x_1, y_2) \\ \vdots \\ \phi(x_N, y_{N-1}) \\ \phi(x_N, y_N)
+\phi(\textbf{x}_1) \\ \phi(\textbf{x}_2) \\ \vdots \\ \phi(\textbf{x}_N)
 \end{bmatrix}, \begin{bmatrix} 
-u(x_1^\prime, y_1^\prime) \\ v(x_1^\prime, y_1^\prime) \\ \vdots \\ u(x_M^\prime, y_M^\prime) \\ v(x_M^\prime, y_M^\prime)
+[F^1(\textbf{x}^\prime_1) \\ \vdots \\ F^1(\textbf{x}^\prime_M) \\ F^2(\textbf{x}^\prime_1) \\ \vdots \\ F^2(\textbf{x}^\prime_M) ]
 \end{bmatrix}
 \right) &= \\ 
 \begin{bmatrix}
-\text{Cov}(\phi(x_1,y_1),u(x_1^\prime, y_1^\prime)) & \hdots & \text{Cov}(\phi(x_1,y_1),v(x_M^\prime, y_M^\prime)) \\
+\text{Cov}(\phi(\textbf{x}_1),F^1(\textbf{x}_1^\prime)) & \hdots & \text{Cov}(\phi(\textbf{x}_1),F^2(\textbf{x}_M^\prime)) \\
 \vdots & \vdots & \vdots \\
-\text{Cov}(\phi(x_n,y_n),u(x_1^\prime, y_1^\prime)) & \hdots & \text{Cov}(\phi(x_n,y_n),v(x_M^\prime, y_M^\prime)) 
+\text{Cov}(\phi(\textbf{x}_n),F^1(\textbf{x}_1^\prime)) & \hdots & \text{Cov}(\phi(\textbf{x}_n),F^2(\textbf{x}_M^\prime)) 
 \end{bmatrix}
 \end{align*}
 \newline
 
-\textbf{ISSUE 2.1:} again, abuse of notation here. We need to be more explicit about the two different X's. \newline
+%\textbf{ISSUE 2.1:} again, abuse of notation here. We need to be more explicit about the two different X's. \newline
 
-\textbf{ISSUE 2.2:} is it correct the way in which we represent the vector $\icol{u \\ v }$? Or should it be first all the u's and then all the v's? \newline
+%\textbf{ISSUE 2.2:} is it correct the way in which we represent the vector $\icol{u \\ v }$? Or should it be first all the u's and then all the v's? \newline
+
 
 Now we just need to characterize each of these entries, as follows:
 
 \begin{align*}
-    \text{Cov}\left(\phi(x_i, y_i), \begin{bmatrix}
-    u(x_j^\prime, y_j^\prime) \\ v(x_j^\prime, y_j^\prime)
-    \end{bmatrix}\right) &= \text{Cov}\left(\phi(x_i, y_i), F(x_j^\prime, y_j^\prime)\right) = \\
-   &=   \text{Cov}\left(\phi(x_i, y_i), -\nabla \phi(x_j^\prime, y_j^\prime) +\nabla \times \psi(x_j^\prime, y_j^\prime)\right) = \\
-   &= \text{Cov}\left(\phi(x_i, y_i), -\nabla \phi(x_j^\prime, y_j^\prime) \right) = \\
-   &= \text{Cov}\left(\phi(x_i, y_i), \begin{bmatrix}
-    \frac{\partial}{\partial x_j^\prime} \phi(x_j^\prime, y_j^\prime) \\ \frac{\partial}{\partial y_j^\prime} \phi(x_j^\prime, y_j^\prime) 
-    \end{bmatrix}\right) = \\
-    &= \begin{bmatrix}
-    \frac{\partial}{\partial x_j^\prime} \text{Cov}(\phi(x_i, y_i), \phi(x_j^\prime, y_j^\prime)) \\
-    \frac{\partial}{\partial y_j^\prime} \text{Cov}(\phi(x_i, y_i), \phi(x_j^\prime, y_j^\prime))
-    \end{bmatrix} = \\
-    &= \begin{bmatrix}
-    \frac{\partial}{\partial x_j^\prime} K_{\phi}((x_i, y_i), (x_j^\prime, y_j^\prime)) \\
-    \frac{\partial}{\partial y_j^\prime} K_{\phi}((x_i, y_i), (x_j^\prime, y_j^\prime))
-    \end{bmatrix} := \nabla_{D_M} K_{\phi} ((x_i, y_i), (x_j^\prime, y_j^\prime))
+    \text{Cov}\left(\phi(\textbf{x}_n), F^1(\textbf{x}_m^\prime)\right) &=    \text{Cov}\left(\phi(\textbf{x}_n), -\frac{\partial}{\partial x_m^{1}} \phi(\textbf{x}_m^\prime) +\frac{\partial}{\partial x_m^2} \psi(\textbf{x}_m^\prime)  \right) \\
+    &\text{\# by independence of $\phi$ and $\psi$} \\
+   &= \text{Cov}\left(\phi(\textbf{x}_n), -\frac{\partial}{\partial x_m^{1}} \phi(\textbf{x}_m^\prime) \right) \\
+   &= 
+   -\frac{\partial}{\partial x_m^{1}} \text{Cov}(\phi(\textbf{x}_n), \phi(\textbf{x}_m^\prime)) \\
+    &\text{\# by lemma above (cite number)} \\
+    &= 
+    -\frac{\partial}{\partial x_m^{1}} K_{\phi}(\textbf{x}_n, \textbf{x}_m^\prime)
 \end{align*}
 
-where we used this notation because we refer to the test points (grid) with $D_N := (x_n, y_n)_{n,n^\prime}^N$, and to the observation with $D_M := (x_m, y_m)_{m,m^\prime}^M$. \newline
+and similarly 
+
+\begin{align*}
+    \text{Cov}\left(\phi(\textbf{x}_n), F^2(\textbf{x}_m^\prime)\right) &=    \text{Cov}\left(\phi(\textbf{x}_n), -\frac{\partial}{\partial x_m^{2}} \phi(\textbf{x}_m^\prime) - \frac{\partial}{\partial x_m^1} \psi(\textbf{x}_m^\prime)  \right) \\
+   &=
+    -\frac{\partial}{\partial x_m^{2}} K_{\phi}(\textbf{x}_n, \textbf{x}_m^\prime)
+\end{align*}
+
+To ease notation, we define 
+$$
+\nabla_{D_M}K_{\phi}(\textbf{x}_n, \textbf{x}_m^\prime) := \text{Cov}\left(\phi(\textbf{x}_n), F(\textbf{x}_m^\prime)\right) = 
+\begin{bmatrix}
+-\frac{\partial}{\partial x_m^{1}} K_{\phi}(\textbf{x}_n, \textbf{x}_m^\prime) \\
+-\frac{\partial}{\partial x_m^{2}} K_{\phi}(\textbf{x}_n, \textbf{x}_m^\prime)
+\end{bmatrix}
+$$
+
+where we used this notation because we refer to the test points (grid) with $D_N := (\textbf{x}_n)_{n=1}^N$, and to the observation with $D_M := (\textbf{x}_m)_{m=1}^M$. \newline
 
 So overall we have
 $$
 \begin{bmatrix}
-\phi \\ u \\ v 
+\bm{\phi} \\ \textbf{F}^\prime 
 \end{bmatrix}
 \sim \mathcal{N}\left( 
 \begin{bmatrix}
-0 \\ 0 \\ 0 
+0 \\ 0 
 \end{bmatrix}, 
 \begin{bmatrix}
 K_{\phi} & \nabla_{D_M} K_{\phi} \\
-\nabla_{D_M} K_{\phi}^T & \sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi} + \nabla \times K_{\psi}
+\nabla_{D_M} K_{\phi}^T & \sigma^2 \mathbb{I}_{2M} + \nabla K_{\phi} + \nabla \times K_{\psi}
 \end{bmatrix}
 \right)
 $$
 
-This vector has size $N^2 + 2M$, with the caveat that $\phi$ is evaluated at test points $D_N$ whereas $\icol{u \\ v}$ at the observations $D_M$. \newline
+This vector has size $N + 2M$, with the caveat that $\bm{\phi}$ is evaluated at test points $D_N$ whereas $\textbf{F}^\prime$ at the observations $D_M$. \newline
 
-We can then, finally, get the quantity of interest, $\phi \mid u,v$, applying fact 1 above. We obtain 
+We can then, finally, get the quantity of interest, $\bm{\phi} \mid \textbf{F}^\prime$, applying fact 1 above. We obtain 
 $$
-\mathbb{E}(\phi \mid u, v) = \nabla_{D_M} K_{\phi} (\sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} \begin{bmatrix}
-u \\ v
-\end{bmatrix}
+\mathbb{E}(\bm{\phi} \mid \textbf{F}^\prime) = \nabla_{D_M} K_{\phi} (\sigma^2 \mathbb{I}_{2M} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} \textbf{F}^\prime
 $$
-which has dimensionality $N^2 \times 1$, exactly as desired, and 
+which is of dimension $N$, exactly as desired, and 
 $$
-\text{Var}(\phi \mid u, v) = K_{\phi} - \nabla_{D_M} K_{\phi} (\sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} \nabla_{D_M} K_{\phi}^T
+\text{Var}(\bm{\phi} \mid \textbf{F}^\prime) = K_{\phi} - \nabla_{D_M} K_{\phi} (\sigma^2 \mathbb{I}_{2M} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} \nabla_{D_M} K_{\phi}^T
 $$
-with dimensionality $N^2 \times N^2$, again as desired. \newline
+with dimension $N \times N$, again as desired. \newline
 
 The same exact analysis can then be generalized to $\psi$, leading to 
 $$
-    \phi | u, v \sim \mathcal{N}(\Bar{\mu}_{\psi}, \Bar{\Sigma}_{\psi})
+    \bm{\psi} \mid \textbf{F}^\prime \sim \mathcal{N}(\Bar{\mu}_{\psi}, \Bar{\Sigma}_{\psi})
 $$
 with 
 \begin{align*}
     &\Bar{\mu}_{\psi} = \nabla_{D_M} K_{\psi} (\sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} 
-    \begin{bmatrix}u \\ v \end{bmatrix} \\
+    \textbf{F}^\prime \\
     &\Bar{\Sigma}_{\psi} = K_{\psi} - \nabla_{D_M} K_{\psi} (\sigma^2 \mathbb{I}_{2m} + \nabla K_{\phi} + \nabla \times K_{\psi})^{-1} \nabla_{D_M} K_{\psi}^T
 \end{align*}
 for $\nabla_{D_M} K_{\psi}$ defined similarly to what we did for $\phi$ above. This concludes our analysis for this section. \newline
 
-\textbf{Final issue:} for the $\psi$, we have the curl, but we want that to be a gradient as well. How can we formalize that? Still not clear to me. 
 \newpage
 
 \section*{Derivative observations on Gaussian Processes - notation to be fixed, proof to be fixed...}
