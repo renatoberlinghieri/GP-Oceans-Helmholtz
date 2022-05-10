@@ -1,9 +1,9 @@
-
 # Hide any GPUs to that tensorflow uses CPU (typically preferable due to memory constraints)
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 
 #first, define function for kernel
 @tf.function
@@ -19,6 +19,24 @@ def Sqr_exp_2D(X1, Y1, X2, Y2, ls, sigma):
     d_sqr = (X1-X2)**2 + (Y1-Y2)**2
     K = sigma**2 * tf.exp(-(1./2.)*(d_sqr)/ls**2)
     return K
+
+
+def Sqr_exp_2D_uv(XY, ls, sigma, obs_noise):
+    """
+    Function similar to sqr_exp_2D, with different input structure. 
+    To be used for the analysis without the Helmholtz decomposition.
+    """
+    N = XY.shape[0] # number of locations to consider, e.g. grid_pts**2
+    
+    X, Y = (XY[:, :1], XY[:, 1:])
+    X1, Y1 = tf.tile(X, [1, N]), tf.tile(Y, [1, N]) # each column is a copy of X / Y
+    X2, Y2 = tf.transpose(X1), tf.transpose(Y1)
+    
+    d_sqr = (X1-X2)**2 + (Y1-Y2)**2
+    K = sigma**2 * tf.exp(-(1./2.)*(d_sqr)/ls**2)
+    
+    return K + tf.eye(K.shape[0]) * obs_noise**2
+
 
 @tf.function
 def K_mixed_partials(X1, Y1, X2, Y2, first_partial_X=True, second_partial_X=True, ls=1., sigma=1.):
@@ -42,7 +60,6 @@ def Sqr_exp_derivative_2D(XY, ls, sigma, obs_noise, curl=False, include_linear=F
     """Sqr_exp_derivative_2D computes the covariance matrix of the gradients of a function
     distributed according of a GP with a squared exponential kernel, evaluated at XY.
     """
-    print("N, i.e. XY.shape[0]: ", XY.shape[0])
     N = XY.shape[0] # number of locations to consider, e.g. grid_pts**2
     X, Y = (XY[:, :1], XY[:, 1:]) if not curl else (XY[:, 1:], XY[:, :1])
     X1, Y1 = tf.tile(X, [1, N]), tf.tile(Y, [1, N]) # each column is a copy of X / Y
@@ -71,12 +88,37 @@ def Sqr_exp_derivative_2D(XY, ls, sigma, obs_noise, curl=False, include_linear=F
 # Define kernel function for vector observations, operating on 2D coordinates
 #old kernel_fcn = lambda XY: Sqr_exp_derivative_2D(XY, ls_Phi, sigma_Phi) + Sqr_exp_derivative_2D(XY, ls_A, sigma_A, curl=True)
 
-def kernel_fcn(XY, ls_Phi = tf.constant(0.1, dtype=tf.float32), sigma_Phi = tf.constant(1., dtype=tf.float32),
+def kernel_fcn_helm(XY, ls_Phi = tf.constant(0.1, dtype=tf.float32), sigma_Phi = tf.constant(1., dtype=tf.float32),
               ls_A = tf.constant(0.1, dtype=tf.float32), sigma_A = tf.constant(1., dtype=tf.float32),
               obs_noise = tf.constant(0.02, dtype=tf.float32),
               include_linear = False):
     ker = Sqr_exp_derivative_2D(XY, ls_Phi, sigma_Phi, obs_noise, include_linear=include_linear) + Sqr_exp_derivative_2D(XY, ls_A, sigma_A, obs_noise, curl=True, include_linear=include_linear)
     return ker
+
+def kernel_fcn_uv(XY, ls_u = tf.constant(0.1, dtype=tf.float32), sigma_u = tf.constant(1., dtype=tf.float32),
+                ls_v = tf.constant(0.1, dtype=tf.float32), sigma_v = tf.constant(1., dtype=tf.float32),
+                obs_noise = tf.constant(0.02, dtype=tf.float32)):
+    """
+    UV_GP_kernel computes a covariance kernel for a vector-field evaluated at points XY.
+
+    Args:
+    XY: points R^2 at which to compute covariance (np.array of shape [N, 2])
+    ls_u, ls_v: length-scales of the covariances over U and V, respectively (scalars)
+    sigma_u, sigma_v: signal standard deviations for U and V, respectively (scalars)
+    sigma_obs: noise standard deviation for observations
+
+    Returns:
+        Covariance matrix K (np.array of shape [2*N, 2*N]) where for n in [N],
+            K[n,m]=Cov(U[n], U[m]),
+            K[N+n,N+m]=Cov(V[n], V[m]), and
+            K(n, N+m)=K(N+n, m)=0.
+    """
+    N = XY.shape[0]
+    
+    K_all = tf.concat(
+            [tf.concat([Sqr_exp_2D_uv(XY, ls_u, sigma_u, obs_noise), np.zeros([N,N])], axis=1),
+            tf.concat([np.zeros([N, N]), Sqr_exp_2D_uv(XY, ls_v, sigma_v, obs_noise)], axis=1)], axis=0)
+    return K_all
 
 def conditional(K_all, train_idcs, train_obs, test_idcs):
     """conditional returns the mean and covariance of the test observations 
@@ -92,13 +134,9 @@ def conditional(K_all, train_idcs, train_obs, test_idcs):
     Returns:
         Conditional expecation, variance of test observations, and likelihood.
     """
-    print("K ALL SHAPE: ", K_all.shape)
     K_tr_tr = K_all[train_idcs][:, train_idcs] # train / train
     K_te_tr = K_all[test_idcs][:, train_idcs]  # test  / train
     K_te_te = K_all[test_idcs][:, test_idcs]   # test  / test
-    print("K TR TR SHAPE: ", K_tr_tr.shape)
-    print("K TE TR SHAPE: ", K_te_tr.shape)
-    print("K TE TE SHAPE: ", K_te_te.shape)
     
     #cast to float64 for numerical issues with inverse
     K_te_tr = tf.cast(K_te_tr, dtype=tf.float64)
@@ -121,7 +159,7 @@ def conditional(K_all, train_idcs, train_obs, test_idcs):
     
     return test_mu, test_cov, log_likelihood
 
-def vectorfield_GP_Regression(XY_train, UV_train, XY_test, 
+def vectorfield_GP_Regression_helm(XY_train, UV_train, XY_test, 
                               ls_Phi = tf.constant(0.1, dtype=tf.float32), sigma_Phi = tf.constant(1., dtype=tf.float32),
                               ls_A = tf.constant(0.1, dtype=tf.float32), sigma_A = tf.constant(1., dtype=tf.float32), 
                               obs_noise = tf.constant(0.02, dtype=tf.float32), include_linear=False):
@@ -145,7 +183,7 @@ def vectorfield_GP_Regression(XY_train, UV_train, XY_test,
     assert XY_train_test.shape[0] == (N_train + N_test)
     train_obs = np.concatenate([UV_train[:, 0], UV_train[:, 1]])
     
-    K_all = np.array(kernel_fcn(XY_train_test, ls_Phi, sigma_Phi, ls_A, sigma_A, obs_noise, include_linear))
+    K_all = np.array(kernel_fcn_helm(XY_train_test, ls_Phi, sigma_Phi, ls_A, sigma_A, obs_noise, include_linear))
     train_idcs = list(np.arange(N_train)) +list((N_train+N_test) + np.arange(N_train))
     test_idcs = [i for i in range(K_all.shape[0]) if i not in train_idcs]
     
@@ -154,4 +192,90 @@ def vectorfield_GP_Regression(XY_train, UV_train, XY_test,
     return test_mu, test_cov, ll
 
 
+def vectorfield_GP_Regression_uv(XY_train, UV_train, XY_test, 
+                                 ls_u = tf.constant(0.1, dtype=tf.float32), sigma_u = tf.constant(1., dtype=tf.float32),
+                                 ls_v = tf.constant(0.1, dtype=tf.float32), sigma_v = tf.constant(1., dtype=tf.float32),
+                                 obs_noise = tf.constant(0.02, dtype=tf.float32)):
+    
+    N_train, N_test = XY_train.shape[0], XY_test.shape[0]
+    XY_train_test = np.concatenate([XY_train, XY_test], axis=0)
+    assert XY_train_test.shape[0] == (N_train + N_test)
+    train_obs = np.concatenate([UV_train[:, 0], UV_train[:, 1]])
+    
+    K_all = np.array(kernel_fcn_uv(XY_train_test, ls_u, sigma_u, ls_v, sigma_v, obs_noise))
+    train_idcs = list(np.arange(N_train)) +list((N_train+N_test) + np.arange(N_train))
+    test_idcs = [i for i in range(K_all.shape[0]) if i not in train_idcs]
+    
+    test_mu, test_cov, ll = conditional(K_all, train_idcs, train_obs, test_idcs)
+    
+    return test_mu, test_cov, ll
 
+
+def plot_results_grid(X_grid, Y_grid, XY_train, test_mu, test_cov, best_params, grid_points, min_lat, min_lon, scale=0.03, helm=True):
+    
+    # format mean and variance for plotting
+    test_var = np.diag(test_cov)
+    test_mu_grid = tf.reshape(test_mu, [2, grid_points, grid_points])
+    test_var = tf.reshape(test_var, [2, grid_points, grid_points])
+    test_var_grid = test_var[0] + test_var[1]
+
+    # Plot the predictive mean and variance conditioned on training points 
+    f, axarr = plt.subplots(ncols=2, figsize=[11,5])
+    ax = axarr[0]
+    if helm:
+        ax.set_title("Predictive Mean ~ Helmholtz", fontsize=20)
+    else:
+        ax.set_title("Predictive Mean ~ UV", fontsize=20)
+    ax.quiver(X_grid, Y_grid, test_mu_grid[0], test_mu_grid[1], scale_units='xy', scale=0.05)
+    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train pt locations", c='r', s=1)
+    #ax.quiver(XY_train[:, 0], XY_train[:, 1], UV_train[:,0], UV_train[:,1], color='red', scale_units='xy', scale=0.05)
+    
+    #to plot scale segments
+    ax.plot(np.arange(min_lat+10, min_lat+10+best_params[0]), np.ones(best_params[0])*(min_lon+10), c = 'blue')
+    ax.plot(np.ones(5)*(min_lat+10), np.arange(min_lon+8, min_lon+13), c = 'blue')
+    ax.plot(np.ones(5)*(min_lat+10+best_params[0]), np.arange(min_lon+8, min_lon+13), c = 'blue')
+    if helm:
+        str_par1 = "Lengthscale Φ: " + str(best_params[0])
+    else:
+        str_par1 = "Lengthscale U: " + str(best_params[0])
+    ax.annotate(str_par1, (min_lat+13+best_params[0], min_lon+7), size = 7, c = 'blue')
+    
+    ax.plot(np.arange(min_lat+10, min_lat+10+best_params[2]), np.ones(best_params[2])*(min_lon+3), c = 'green')
+    ax.plot(np.ones(5)*(min_lat+10), np.arange(min_lon+1, min_lon+6), c = 'green')
+    ax.plot(np.ones(5)*(min_lat+10+best_params[2]), np.arange(min_lon+1, min_lon+6), c = 'green')
+    if helm:
+        str_par2 = "Lengthscale Ψ: " + str(best_params[2])
+    else:
+        str_par2 = "Lengthscale V: " + str(best_params[2])
+    ax.annotate(str_par2, (min_lat+13+best_params[2], min_lon), size = 7, c = 'green')
+    
+    ax.set_xlabel('x'); ax.set_ylabel('y')
+    ax.legend()
+
+    ax = axarr[1]
+    ax.set_title("Predictive Variance", fontsize=20)
+    cs = ax.contourf(X_grid, Y_grid, test_var_grid)
+    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train pt locations", c='r', s=0.2)
+    ax.set_xlabel('x'); ax.set_ylabel('y')
+    f.colorbar(cs, ax = ax, cmap='inferno')
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    
+    return
+
+
+def plot_posterior_draws(X_grid, Y_grid, XY_train, test_mu, test_cov, grid_points, N_samples=4):
+    f, axarr = plt.subplots(ncols=N_samples, figsize=[5*N_samples, 5])
+    for i, ax in enumerate(axarr):
+        test_UV = np.random.multivariate_normal(mean=test_mu[:,0], cov=test_cov)
+        test_UV_grid = test_UV.reshape([2, grid_points, grid_points])
+        ax.quiver(X_grid, Y_grid, test_UV_grid[0], test_UV_grid[1])
+        ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train_pts", c = 'red', s = 1)
+        ax.set_xlabel('x'); ax.set_ylabel('y')
+        ax.set_title("Sample %d"%i)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    return
