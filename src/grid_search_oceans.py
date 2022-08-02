@@ -29,7 +29,8 @@ def grid_search_helm(ls_Phi_grid, sigma_Phi_grid, ls_A_grid, sigma_A_grid, obs_n
                                              sigma_Phi = tf.constant(params['sigma_Phi'][1], dtype=tf.float32),
                                              ls_A = tf.constant(params['ls_A'][1], dtype=tf.float32), 
                                              sigma_A = tf.constant(params['sigma_A'][1], dtype=tf.float32),
-                                             obs_noise = tf.constant(params['obs_noise'][1], dtype=tf.float32))[2]
+                                             obs_noise = tf.constant(params['obs_noise'][1], dtype=tf.float32),
+                                             grid_search = True)[2]
     
         mat_ll[params['ls_Phi'][0], params['sigma_Phi'][0], params['ls_A'][0], params['sigma_A'][0], params['obs_noise'][0]] = ll_new
         if ll_new > ll:
@@ -48,6 +49,67 @@ def grid_search_helm(ls_Phi_grid, sigma_Phi_grid, ls_A_grid, sigma_A_grid, obs_n
 
     return mat_ll 
 
+
+def grid_search_mult_ls(ls_Phi1_grid, sigma_Phi1_grid, ls_A1_grid, sigma_A1_grid,
+                        ls_Phi2_grid, sigma_Phi2_grid, ls_A2_grid, sigma_A2_grid,
+                        obs_noise_grid, XY_train, UV_train, XY_test, file_name="marginal_ll_gs_helm_mult_ls"):
+    
+    """
+    function to perform grid search of parameters for GP regression, with multiple lengthscales.
+    Input: lists of values for each parameter, training points and observations, test points
+    Output: tensor with loglikelihood entries for each possible parameter combination
+    """
+    
+    param_grid = { 'ls_Phi1': list(enumerate(ls_Phi1_grid)),
+                  'sigma_Phi1' : list(enumerate(sigma_Phi1_grid)),
+                  'ls_A1' : list(enumerate(ls_A1_grid)),
+                  'sigma_A1' : list(enumerate(sigma_A1_grid)),
+                  'ls_Phi2': list(enumerate(ls_Phi2_grid)),
+                  'sigma_Phi2' : list(enumerate(sigma_Phi2_grid)),
+                  'ls_A2' : list(enumerate(ls_A2_grid)),
+                  'sigma_A2' : list(enumerate(sigma_A2_grid)),
+                  'obs_noise' : list(enumerate(obs_noise_grid))}
+
+    grid = ParameterGrid(param_grid)
+
+    mat_ll = np.zeros((len(ls_Phi1_grid), len(sigma_Phi1_grid), len(ls_A1_grid), len(sigma_A1_grid), len(ls_Phi2_grid), len(sigma_Phi2_grid), len(ls_A2_grid), len(sigma_A2_grid), len(obs_noise_grid)))
+    best = [0,0,0,0,0,0,0,0,0]
+    ll = -100000
+    itera = 0
+    for params in grid:
+        ll_new = hr.vectorfield_GP_Regression_helm_mult_ls(XY_train, UV_train, XY_test,
+                                             ls_Phi1 = tf.constant(params['ls_Phi1'][1], dtype=tf.float32), 
+                                             sigma_Phi1 = tf.constant(params['sigma_Phi1'][1], dtype=tf.float32),
+                                             ls_A1 = tf.constant(params['ls_A1'][1], dtype=tf.float32), 
+                                             sigma_A1 = tf.constant(params['sigma_A1'][1], dtype=tf.float32),
+                                             ls_Phi2 = tf.constant(params['ls_Phi2'][1], dtype=tf.float32), 
+                                             sigma_Phi2 = tf.constant(params['sigma_Phi2'][1], dtype=tf.float32),
+                                             ls_A2 = tf.constant(params['ls_A2'][1], dtype=tf.float32), 
+                                             sigma_A2 = tf.constant(params['sigma_A2'][1], dtype=tf.float32),
+                                             obs_noise = tf.constant(params['obs_noise'][1], dtype=tf.float32),
+                                             grid_search = True)[2]
+    
+        mat_ll[params['ls_Phi1'][0], params['sigma_Phi1'][0], params['ls_A1'][0], params['sigma_A1'][0], params['ls_Phi2'][0], params['sigma_Phi2'][0], params['ls_A2'][0], params['sigma_A2'][0], params['obs_noise'][0]] = ll_new
+        if ll_new > ll:
+                    ll = ll_new
+                    best = [params['ls_Phi1'][1],params['sigma_Phi1'][1],params['ls_A1'][1],params['sigma_A1'][1], params['ls_Phi2'][1],params['sigma_Phi2'][1],params['ls_A2'][1],params['sigma_A2'][1], params['obs_noise'][1]]
+                    print(params['ls_Phi1'][1],
+                          params['sigma_Phi1'][1],
+                          params['ls_A1'][1],
+                          params['sigma_A1'][1],
+                          params['ls_Phi2'][1],
+                          params['sigma_Phi2'][1],
+                          params['ls_A2'][1],
+                          params['sigma_A2'][1],
+                          params['obs_noise'][1], ' : ', ll)
+        itera += 1
+        if (itera % 50) == 0:
+            print("Iteration: ", itera)
+        
+    np.savez_compressed("../params_opt/" + file_name, ll = mat_ll)
+
+    return mat_ll 
+    
 
 
 def grid_search_uv(ls_u_grid, sigma_u_grid, ls_v_grid, sigma_v_grid, obs_noise_grid, 

@@ -4,6 +4,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import ipdb
+import time
+
 
 #first, define function for kernel
 @tf.function
@@ -95,6 +98,20 @@ def kernel_fcn_helm(XY, ls_Phi = tf.constant(0.1, dtype=tf.float32), sigma_Phi =
     ker = Sqr_exp_derivative_2D(XY, ls_Phi, sigma_Phi, obs_noise, include_linear=include_linear) + Sqr_exp_derivative_2D(XY, ls_A, sigma_A, obs_noise, curl=True, include_linear=include_linear)
     return ker
 
+def kernel_fcn_helm_mult_ls(XY, ls_Phi1 = tf.constant(0.1, dtype=tf.float32), 
+                            sigma_Phi1 = tf.constant(1., dtype=tf.float32),
+                            ls_A1 = tf.constant(0.1, dtype=tf.float32), 
+                            sigma_A1 = tf.constant(1., dtype=tf.float32), 
+                            ls_Phi2 = tf.constant(0.1, dtype=tf.float32), 
+                            sigma_Phi2 = tf.constant(1., dtype=tf.float32),
+                            ls_A2 = tf.constant(0.1, dtype=tf.float32), 
+                            sigma_A2 = tf.constant(1., dtype=tf.float32),
+                            obs_noise = tf.constant(0.02, dtype=tf.float32),
+                            include_linear = False):
+    ker = Sqr_exp_derivative_2D(XY, ls_Phi1, sigma_Phi1, obs_noise, include_linear=include_linear) + Sqr_exp_derivative_2D(XY, ls_A1, sigma_A1, obs_noise, curl=True, include_linear=include_linear) + Sqr_exp_derivative_2D(XY, ls_Phi2, sigma_Phi2, obs_noise, include_linear=include_linear) + Sqr_exp_derivative_2D(XY, ls_A2, sigma_A2, obs_noise, curl=True, include_linear=include_linear)
+    return ker
+
+
 def kernel_fcn_uv(XY, ls_u = tf.constant(0.1, dtype=tf.float32), sigma_u = tf.constant(1., dtype=tf.float32),
                 ls_v = tf.constant(0.1, dtype=tf.float32), sigma_v = tf.constant(1., dtype=tf.float32),
                 obs_noise = tf.constant(0.02, dtype=tf.float32)):
@@ -120,7 +137,7 @@ def kernel_fcn_uv(XY, ls_u = tf.constant(0.1, dtype=tf.float32), sigma_u = tf.co
             tf.concat([np.zeros([N, N]), Sqr_exp_2D_uv(XY, ls_v, sigma_v, obs_noise)], axis=1)], axis=0)
     return K_all
 
-def conditional(K_all, train_idcs, train_obs, test_idcs):
+def conditional(K_all, train_idcs, train_obs, test_idcs, grid_search=False):
     """conditional returns the mean and covariance of the test observations 
     conditioned on the training observations.
     
@@ -132,7 +149,7 @@ def conditional(K_all, train_idcs, train_obs, test_idcs):
         train_obs: values of training observations upon which to condition.
         
     Returns:
-        Conditional expecation, variance of test observations, and likelihood.
+        Conditional expectation, variance of test observations, and likelihood.
     """
     K_tr_tr = K_all[train_idcs][:, train_idcs] # train / train
     K_te_tr = K_all[test_idcs][:, train_idcs]  # test  / train
@@ -143,13 +160,21 @@ def conditional(K_all, train_idcs, train_obs, test_idcs):
     K_tr_tr = tf.cast(K_tr_tr, dtype=tf.float64)
     K_te_te = tf.cast(K_te_te, dtype=tf.float64)
     train_obs = tf.cast(train_obs, dtype=tf.float64)
-   
-    #ipdb.set_trace()
     
+    #condition number for K_tr_tr
+    #print(condition_number(K_tr_tr))
+    
+    log_likelihood = -0.5*tf.matmul(tf.transpose(tf.reshape(train_obs,[-1,1])),tf.reshape(np.linalg.solve(K_tr_tr,train_obs),[-1,1])) - 0.5*np.linalg.slogdet(K_tr_tr)[1]
+    
+    #to speed up grid_search, no need to compute the actual mean and cov:
+    if grid_search:
+        return 0, 0, log_likelihood
+    
+    #tstart = time.time()
+    
+    #ipdb.set_trace()
     test_mu = tf.matmul(K_te_tr, tf.reshape(np.linalg.solve(K_tr_tr,train_obs),[-1,1]))
     test_cov = K_te_te - tf.matmul(K_te_tr, np.linalg.solve(K_tr_tr,tf.transpose(K_te_tr)))
-    #ipdb.set_trace()
-    log_likelihood = -0.5*tf.matmul(tf.transpose(tf.reshape(train_obs,[-1,1])),tf.reshape(np.linalg.solve(K_tr_tr,train_obs),[-1,1])) - 0.5*np.linalg.slogdet(K_tr_tr)[1]
     
     #cast back to float32 for consistency across notebook
     K_te_tr = tf.cast(K_te_tr, dtype=tf.float32)
@@ -157,12 +182,25 @@ def conditional(K_all, train_idcs, train_obs, test_idcs):
     K_te_te = tf.cast(K_te_te, dtype=tf.float32)
     train_obs = tf.cast(train_obs, dtype=tf.float32)
     
+    #tend = time.time()
+    #print("time gained inside conditional: ", tend-tstart)
+    
     return test_mu, test_cov, log_likelihood
+
+def condition_number(A):
+    """
+    Args:
+        A: positive semidefinite matrix
+    """
+    eigval = np.linalg.eigvalsh(A)
+    cn = np.log(np.max(eigval))-np.log(np.min(eigval))
+    return cn 
+    
 
 def vectorfield_GP_Regression_helm(XY_train, UV_train, XY_test, 
                               ls_Phi = tf.constant(0.1, dtype=tf.float32), sigma_Phi = tf.constant(1., dtype=tf.float32),
                               ls_A = tf.constant(0.1, dtype=tf.float32), sigma_A = tf.constant(1., dtype=tf.float32), 
-                              obs_noise = tf.constant(0.02, dtype=tf.float32), include_linear=False):
+                              obs_noise = tf.constant(0.02, dtype=tf.float32), include_linear=False, grid_search=False):
     """vectorfield_GP_Regression
     
     Assumes zero mean function. 
@@ -177,18 +215,67 @@ def vectorfield_GP_Regression_helm(XY_train, UV_train, XY_test,
     Returns:
         posterior mean of size [2*N_test] and covariance of size [2*N_test, 2*N_test] for test points.
     """
+    #tstart = time.time()
     np.random.seed(123)
     N_train, N_test = XY_train.shape[0], XY_test.shape[0]
     XY_train_test = np.concatenate([XY_train, XY_test], axis=0)
     assert XY_train_test.shape[0] == (N_train + N_test)
     train_obs = np.concatenate([UV_train[:, 0], UV_train[:, 1]])
     
+    #tbeforekernel = time.time()
     K_all = np.array(kernel_fcn_helm(XY_train_test, ls_Phi, sigma_Phi, ls_A, sigma_A, obs_noise, include_linear))
+    #tafterkernel = time.time()
+    
     train_idcs = list(np.arange(N_train)) +list((N_train+N_test) + np.arange(N_train))
     test_idcs = [i for i in range(K_all.shape[0]) if i not in train_idcs]
     
-    test_mu, test_cov, ll = conditional(K_all, train_idcs, train_obs, test_idcs)
+    test_mu, test_cov, ll = conditional(K_all, train_idcs, train_obs, test_idcs, grid_search=grid_search)
     
+    #tend = time.time()
+    
+    #print(f"overall time is: {tend-tstart}, where {tafterkernel - tbeforekernel} is used for kernel")
+    return test_mu, test_cov, ll
+
+
+def vectorfield_GP_Regression_helm_mult_ls(XY_train, UV_train, XY_test, 
+                              ls_Phi1 = tf.constant(0.1, dtype=tf.float32), sigma_Phi1 = tf.constant(1., dtype=tf.float32),
+                              ls_A1 = tf.constant(0.1, dtype=tf.float32), sigma_A1 = tf.constant(1., dtype=tf.float32), 
+                              ls_Phi2 = tf.constant(10, dtype=tf.float32), sigma_Phi2 = tf.constant(1., dtype=tf.float32),
+                              ls_A2 = tf.constant(10, dtype=tf.float32), sigma_A2 = tf.constant(1., dtype=tf.float32), 
+                              obs_noise = tf.constant(0.02, dtype=tf.float32), include_linear=False, grid_search=False):
+    """vectorfield_GP_Regression
+    
+    Assumes zero mean function. 
+    
+    Args:
+        XY_train: np.array of shape [N_train, 2] with X & Y coordinates of observations
+        UV_train: np.array of shape [N_train, 2] with U & V flow observations
+        XY_test: np.array of shape [N_test, 2] with X & Y coordinates of test observations, usually on a grid
+        kernel_fcn: kernel function that takes in an array of shape [N, 2] and returns a size 
+            [2*N, 2*N] kernel matrix
+        
+    Returns:
+        posterior mean of size [2*N_test] and covariance of size [2*N_test, 2*N_test] for test points.
+    """
+    #tstart = time.time()
+    np.random.seed(123)
+    N_train, N_test = XY_train.shape[0], XY_test.shape[0]
+    XY_train_test = np.concatenate([XY_train, XY_test], axis=0)
+    assert XY_train_test.shape[0] == (N_train + N_test)
+    train_obs = np.concatenate([UV_train[:, 0], UV_train[:, 1]])
+    
+    #tbeforekernel = time.time()
+    K_all = np.array(kernel_fcn_helm_mult_ls(XY_train_test, ls_Phi1, sigma_Phi1, ls_A1, sigma_A1, ls_Phi2, sigma_Phi2, ls_A2, sigma_A2, obs_noise, include_linear))
+    #tafterkernel = time.time()
+    
+    train_idcs = list(np.arange(N_train)) +list((N_train+N_test) + np.arange(N_train))
+    test_idcs = [i for i in range(K_all.shape[0]) if i not in train_idcs]
+    
+    test_mu, test_cov, ll = conditional(K_all, train_idcs, train_obs, test_idcs, grid_search=grid_search)
+    
+    #tend = time.time()
+    
+    #print(f"overall time is: {tend-tstart}, where {tafterkernel - tbeforekernel} is used for kernel")
     return test_mu, test_cov, ll
 
 
@@ -223,11 +310,12 @@ def plot_results_grid(X_grid, Y_grid, XY_train, test_mu, test_cov, best_params, 
     f, axarr = plt.subplots(ncols=2, figsize=[11,5])
     ax = axarr[0]
     if helm:
-        ax.set_title("Predictive Mean ~ Helmholtz", fontsize=20)
+        ax.set_title("Prediction ~ our method", fontsize=20)
     else:
-        ax.set_title("Predictive Mean ~ UV", fontsize=20)
-    ax.quiver(X_grid, Y_grid, test_mu_grid[0], test_mu_grid[1], scale_units='xy', scale=0.05)
-    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train pt locations", c='r', s=1)
+        ax.set_title("Prediction ~ standard GP", fontsize=20)
+    ax.quiver(X_grid, Y_grid, test_mu_grid[0], test_mu_grid[1], scale_units='xy', scale=scale)
+    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="buoys' locations", c='r', s=2)
+    ax.scatter(X_grid, Y_grid, label="predicted currents", c='black', s=0.001)
     #ax.quiver(XY_train[:, 0], XY_train[:, 1], UV_train[:,0], UV_train[:,1], color='red', scale_units='xy', scale=0.05)
     
     #to plot scale segments
@@ -249,14 +337,14 @@ def plot_results_grid(X_grid, Y_grid, XY_train, test_mu, test_cov, best_params, 
         str_par2 = "Lengthscale V: " + str(best_params[2])
     ax.annotate(str_par2, (min_lat+13+best_params[2], min_lon), size = 7, c = 'green')
     
-    ax.set_xlabel('x'); ax.set_ylabel('y')
+    ax.set_xlabel('Latitude'); ax.set_ylabel('Longitude')
     ax.legend()
 
     ax = axarr[1]
-    ax.set_title("Predictive Variance", fontsize=20)
+    ax.set_title("Uncertainty", fontsize=20)
     cs = ax.contourf(X_grid, Y_grid, test_var_grid)
-    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train pt locations", c='r', s=0.2)
-    ax.set_xlabel('x'); ax.set_ylabel('y')
+    ax.scatter(XY_train[:, 0], XY_train[:, 1], label="buoys' locations", c='r', s=2)
+    ax.set_xlabel('Latitude'); ax.set_ylabel('Longitude')
     f.colorbar(cs, ax = ax, cmap='inferno')
 
     plt.legend()
@@ -272,8 +360,8 @@ def plot_posterior_draws(X_grid, Y_grid, XY_train, test_mu, test_cov, grid_point
         test_UV = np.random.multivariate_normal(mean=test_mu[:,0], cov=test_cov)
         test_UV_grid = test_UV.reshape([2, grid_points, grid_points])
         ax.quiver(X_grid, Y_grid, test_UV_grid[0], test_UV_grid[1])
-        ax.scatter(XY_train[:, 0], XY_train[:, 1], label="train_pts", c = 'red', s = 1)
-        ax.set_xlabel('x'); ax.set_ylabel('y')
+        ax.scatter(XY_train[:, 0], XY_train[:, 1], label="buoys' locations", c = 'red', s = 1)
+        ax.set_xlabel('Latitude'); ax.set_ylabel('Longitude')
         ax.set_title("Sample %d"%i)
     plt.legend()
     plt.tight_layout()
